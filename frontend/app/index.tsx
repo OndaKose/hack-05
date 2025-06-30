@@ -53,8 +53,8 @@ export default function HomeScreen() {
     fetchLocation();
     setFacts([
       { id: 1, content: 'エスカレーターでは立ち止まる側は右、日本ではこれが常識' },
-      { id: 2, content: '電車の中ではリュックは前にかけるとマナー向上' },
-      { id: 3, content: 'トイレで隣に人がいたら視線を前に' },
+      { id: 2, content: '電車の中ではリュックは前にかけるとマナー向上wwwwwwwww' },
+      { id: 3, content: 'トイレで隣に人がいたら視線を前にwwwwwww' },
     ]);
   }, []);
 
