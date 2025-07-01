@@ -91,7 +91,7 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Text style={styles.header}>半径500m以内の周辺施設かも</Text>
+      <Text style={styles.header}>半径500m以内の周辺施設かもかも</Text>
       {loading && <ActivityIndicator style={{ margin: 16 }} size="large" />}
 
       {coords && (
