@@ -37,6 +37,9 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "googleMapsApiKey": "AIzaSyBe5TWqkByVzo5G2oShkBrVdOuVZfUCen8"
     }
   }
 }
