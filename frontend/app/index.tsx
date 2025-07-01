@@ -1,102 +1,180 @@
-import React, { useEffect, useState } from 'react';
+// frontend/app/index.tsx
+
+import React, { useEffect, useState, useRef } from 'react';
 import {
   SafeAreaView,
   Text,
   View,
-  Button,
   Alert,
   ActivityIndicator,
+  StyleSheet,
+  Dimensions,
+  Button,
   FlatList,
 } from 'react-native';
 import * as Location from 'expo-location';
-import { Header } from '../components/Header';
-import { FactCard } from '../components/FactCard';
+import Constants from 'expo-constants';
+import MapView, { Marker, PROVIDER_GOOGLE, Region } from 'react-native-maps';
+import { fetchNearbyPlaces, Place } from '../utils/places';
 
-type Fact = { id: number; content: string };
+const { width, height } = Dimensions.get('window');
+const MAP_HEIGHT = height * 0.4;
 
 export default function HomeScreen() {
-  // ─── 位置情報ステート ────────────────────
-  const [location, setLocation] = useState<Location.LocationObject | null>(null);
-  const [locLoading, setLocLoading] = useState(false);
+  const [coords, setCoords] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [address, setAddress] = useState<string | null>(null);
+  const [places, setPlaces] = useState<Place[]>([]);
+  const [loading, setLoading] = useState(false);
+  const mapRef = useRef<MapView>(null);
 
-  const fetchLocation = async () => {
-    setLocLoading(true);
+  const apiKey =
+    (Constants.manifest as any)?.extra?.googleMapsApiKey ??
+    (Constants.expoConfig as any)?.extra?.googleMapsApiKey;
+
+  const loadAllData = async () => {
+    setLoading(true);
+
+    // 1) パーミッション
     const { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Error', '位置情報の権限がありません');
-      setLocLoading(false);
+      Alert.alert('権限エラー', '位置情報の権限がありません');
+      setLoading(false);
       return;
     }
+
+    // 2) 現在地取得
+    let loc;
     try {
-      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Highest });
-      setLocation(loc);
+      loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Highest });
     } catch {
-      Alert.alert('Error', '位置情報の取得に失敗しました');
-    } finally {
-      setLocLoading(false);
+      Alert.alert('取得失敗', '現在地の取得に失敗しました');
+      setLoading(false);
+      return;
     }
+    const { latitude, longitude } = loc.coords;
+    setCoords({ latitude, longitude });
+
+    // 3) 逆ジオコーディング
+    try {
+      const resp = await fetch(
+        `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${apiKey}`
+      );
+      const json = await resp.json();
+      setAddress(
+        json.status === 'OK' && json.results.length > 0
+          ? json.results[0].formatted_address
+          : '住所が見つかりませんでした'
+      );
+    } catch {
+      Alert.alert('APIエラー', '住所変換に失敗しました');
+    }
+
+    // 4) Nearby Places
+    try {
+      const nearby = await fetchNearbyPlaces(latitude, longitude, 500, apiKey);
+      setPlaces(nearby);
+    } catch (e: any) {
+      Alert.alert('Places API エラー', e.message);
+    }
+
+    setLoading(false);
   };
 
-  // ─── 豆知識ステート ────────────────────
-  const [facts, setFacts] = useState<Fact[]>([]);
-  const [unknownCount, setUnknownCount] = useState(0);
-
-  const handleKnow = (id: number) => {
-    Alert.alert('Great!', 'あなたはこの常識を知っていました👍');
-  };
-  const handleDontKnow = (id: number) => {
-    setUnknownCount(c => c + 1);
-  };
-
-  // マウント時に一度だけ実行
   useEffect(() => {
-    fetchLocation();
-    setFacts([
-      { id: 1, content: 'エスカレーターでは立ち止まる側は右、日本ではこれが常識' },
-      { id: 2, content: '電車の中ではリュックは前にかけるとマナー向上wwwwwwwww' },
-      { id: 3, content: 'トイレで隣に人がいたら視線を前にwwwwwww' },
-    ]);
+    loadAllData();
   }, []);
 
+  // 地図移動用ヘルパー
+  const moveMap = (region: Region) => {
+    mapRef.current?.animateToRegion(region, 500);
+  };
+
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#F3F4F6' }}>
-      {/* 現在地表示パネル */}
-      <View style={{ padding: 16, backgroundColor: '#FFF', borderBottomWidth: 1, borderColor: '#E5E7EB' }}>
-        <Text style={{ fontSize: 18, fontWeight: 'bold' }}>あなたの現在地</Text>
-        {locLoading ? (
-          <ActivityIndicator style={{ marginTop: 8 }} />
-        ) : location ? (
-          <View style={{ marginTop: 8 }}>
-            <Text>緯度: {location.coords.latitude.toFixed(6)}</Text>
-            <Text>経度: {location.coords.longitude.toFixed(6)}</Text>
-          </View>
-        ) : (
-          <Text style={{ marginTop: 8, color: '#6B7280' }}>位置情報がありません</Text>
-        )}
-        <Button title="再取得" onPress={fetchLocation} />
-      </View>
+    <SafeAreaView style={styles.container}>
+      <Text style={styles.header}>半径500m以内の周辺施設</Text>
+      {loading && <ActivityIndicator style={{ margin: 16 }} size="large" />}
 
-      {/* 常識チェッカー ヘッダー */}
-      <Header title="常識チェッカー" unknownCount={unknownCount} />
+      {coords && (
+        <>
+          {/* 地図 */}
+          <MapView
+            ref={mapRef}
+            provider={PROVIDER_GOOGLE}
+            style={styles.map}
+            initialRegion={{
+              latitude: coords.latitude,
+              longitude: coords.longitude,
+              latitudeDelta: 0.01,
+              longitudeDelta: 0.01,
+            }}
+          >
+            {/* 現在地ピン */}
+            <Marker
+              coordinate={coords}
+              title="現在地"
+              description={address ?? undefined}
+            />
+            {/* Nearby Places ピン */}
+            {places.map((p) => (
+              <Marker
+                key={p.place_id}
+                coordinate={{
+                  latitude: p.geometry.location.lat,
+                  longitude: p.geometry.location.lng,
+                }}
+                title={p.name}
+                description={p.vicinity}
+                pinColor="blue"
+                onPress={() =>
+                  moveMap({
+                    latitude: p.geometry.location.lat,
+                    longitude: p.geometry.location.lng,
+                    latitudeDelta: 0.01,
+                    longitudeDelta: 0.01,
+                  })
+                }
+              />
+            ))}
+          </MapView>
 
-      {/* 豆知識リスト */}
-      <FlatList
-        contentContainerStyle={{ padding: 16 }}
-        data={facts}
-        keyExtractor={item => item.id.toString()}
-        renderItem={({ item }) => (
-          <FactCard
-            fact={item.content}
-            onKnow={() => handleKnow(item.id)}
-            onDontKnow={() => handleDontKnow(item.id)}
+          {/* リスト */}
+          <FlatList
+            style={{ flex: 1 }}
+            data={places}
+            keyExtractor={(i) => i.place_id}
+            renderItem={({ item }) => (
+              <View style={styles.placeItem}>
+                <Text style={styles.placeName}>{item.name}</Text>
+                <Text style={styles.placeVicinity}>{item.vicinity}</Text>
+              </View>
+            )}
+            ListEmptyComponent={
+              <Text style={{ textAlign: 'center', margin: 16 }}>
+                施設が見つかりませんでした
+              </Text>
+            }
           />
-        )}
-        ListEmptyComponent={
-          <View style={{ flex:1, alignItems:'center', justifyContent:'center', marginTop: 20 }}>
-            <Text style={{ color:'#6B7280' }}>豆知識がありません</Text>
-          </View>
-        }
-      />
+        </>
+      )}
+
+      {/* 再取得 */}
+      <Button title="再取得" onPress={loadAllData} />
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#F3F4F6' },
+  header: { fontSize: 20, fontWeight: '700', margin: 16 },
+  map: { width, height: MAP_HEIGHT },
+  placeItem: {
+    backgroundColor: '#FFF',
+    marginHorizontal: 16,
+    marginVertical: 4,
+    padding: 12,
+    borderRadius: 6,
+    elevation: 1,
+  },
+  placeName: { fontSize: 16, fontWeight: '600' },
+  placeVicinity: { color: '#555' },
+});
