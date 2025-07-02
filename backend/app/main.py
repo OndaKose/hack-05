@@ -1,10 +1,11 @@
-from fastapi import FastAPI, Depends
-from app.database import engine, Base, SessionLocal
-from app.routers import health
+# backend/app/main.py
+from fastapi import FastAPI
+from app.routers import health, common_sense   # ← 追加
 
-# テーブル自動作成（開発用）
-Base.metadata.create_all(bind=engine)
+app = FastAPI()
 
-app = FastAPI(title="CommonSense API")
-
+# 既存の /health エンドポイント
 app.include_router(health.router)
+
+# ここで常識ルーターを登録
+app.include_router(common_sense.router)
