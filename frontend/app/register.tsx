@@ -1,4 +1,4 @@
-// Login.tsx
+// app/register.tsx  ← ファイル名もルート名に合わせて register.tsx にリネームしてください
 import React, { useState } from 'react';
 import {
   SafeAreaView,
@@ -9,23 +9,27 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
-// ① navigation の代わりに useRouter をインポート
 import { useRouter } from 'expo-router';
 
-export default function Login() {
-  // ② ここで router を取得
+export default function Register() {
   const router = useRouter();
 
   const [username, setUsername] = useState<string>('');
   const [password, setPassword] = useState<string>('');
+  const [confirm, setConfirm] = useState<string>('');
 
-  const handleLogin = async () => {
+  const handleRegister = async () => {
     if (!username || !password) {
       Alert.alert('入力エラー', 'ユーザーネームとパスワードは必須です');
       return;
     }
+    if (password !== confirm) {
+      Alert.alert('入力エラー', 'パスワードが一致しません');
+      return;
+    }
+
     try {
-      const response = await fetch('https://your-server.com/api/login', {
+      const response = await fetch('https://your-server.com/api/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_name: username, password }),
@@ -33,19 +37,30 @@ export default function Login() {
       const data = await response.json();
 
       if (response.ok) {
-        // ③ 成功したら Home 画面（_layout.tsx の name="Home"）に置き換えて遷移
-        router.replace('/home');
+        Alert.alert(
+          '登録完了',
+          'アカウントが作成されました',
+          [{
+            text: 'OK',
+            onPress: () => {
+              // 登録後はログイン（index）へ置き換え遷移
+              router.replace('/');
+            }
+          }]
+        );
       } else {
-        Alert.alert('ログイン失敗', data.message || 'ユーザーネームまたはパスワードが違います');
+        Alert.alert('登録失敗', data.message || '予期せぬエラー');
       }
-    } catch (error: any) {
-      Alert.alert('通信エラー', error.message || 'ネットワークに接続できません');
+    } catch (e) {
+      const err = e as any;
+      Alert.alert('通信エラー', err.message || 'ネットワークに接続できません');
     }
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      <Text style={styles.title}>ログイン</Text>
+      <Text style={styles.title}>新規登録</Text>
+
       <TextInput
         placeholder="ユーザーネーム"
         value={username}
@@ -53,6 +68,7 @@ export default function Login() {
         style={styles.input}
         autoCapitalize="none"
       />
+
       <TextInput
         placeholder="パスワード"
         value={password}
@@ -61,21 +77,29 @@ export default function Login() {
         secureTextEntry
       />
 
-      {/* ログインボタン */}
-      <Button title="ログイン" onPress={handleLogin} />
+      <TextInput
+        placeholder="パスワード再入力"
+        value={confirm}
+        onChangeText={setConfirm}
+        style={styles.input}
+        secureTextEntry
+      />
 
-      {/* 新規登録へ移動 */}
+      <Button
+        title="登録する"
+        onPress={() => { void handleRegister(); }}
+      />
+
       <View style={styles.footer}>
-        <Text>アカウントをお持ちでない方：</Text>
+        <Text>アカウントをお持ちの方：</Text>
         <Button
-          title="新規登録へ"
+          title="ログインへ"
           onPress={() => {
-            // ④ _layout.tsx の name="NewRegistration" に積み重ね遷移
-            router.push('/register');
+            // ログイン画面（app/index.tsx）へ積み重ね遷移
+            router.push('/');
           }}
         />
       </View>
-
     </SafeAreaView>
   );
 }
@@ -107,3 +131,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 });
+
