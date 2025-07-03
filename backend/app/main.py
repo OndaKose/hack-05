@@ -1,15 +1,21 @@
-# hack-05/backend/app/main.py
 from fastapi import FastAPI
-from app.database import Base, engine  # Base と engine をインポート
-from app.routers import common_sense
+from fastapi.middleware.cors import CORSMiddleware
+from app.database import Base, engine
+from app.routers import common_sense, auth
 
 app = FastAPI()
 
-# ── ここを追加 ───────────────────────────
 @app.on_event("startup")
 def on_startup():
-    # マイグレーションがまだなら、ここでテーブルを全部作る
     Base.metadata.create_all(bind=engine)
-# ────────────────────────────────────────
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # フロントがどこから来ても OK
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.include_router(common_sense.router)
+app.include_router(auth.router)
