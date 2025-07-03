@@ -1,17 +1,8 @@
-// frontend/app/_layout.tsx
-import React from 'react';
+// app/_layout.tsx
 import { Slot } from 'expo-router';
 
-// ← ここにルートのスクリーン名と渡せるパラメータを定義
-export type RootStackParamList = {
-  // index.tsx（ログイン画面）をルートとして扱うならキーは "index" になります
-  index: undefined;
-  // もしファイル名が Login.tsx なら "Login" にしてください
-  Login: undefined;
-  NewRegistration: undefined;
-  explore: undefined;
-};
-
+// ルートレイアウトは単に子ルートを描くだけ。
+// ナビゲーションや useEffect はここではやらずに、個別の index.tsx でリダイレクトします。
 export default function RootLayout() {
   return <Slot />;
 }

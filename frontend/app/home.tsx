@@ -1,17 +1,8 @@
-// frontend/app/index.tsx
+// frontend/app/home.tsx
 
 import React, { useEffect, useState, useRef } from 'react';
-import {
-  SafeAreaView,
-  Text,
-  View,
-  Alert,
-  ActivityIndicator,
-  StyleSheet,
-  Dimensions,
-  Button,
-  FlatList,
-} from 'react-native';
+import { SafeAreaView, Text, View, Alert, ActivityIndicator, StyleSheet, Dimensions, Button, FlatList } from 'react-native';
+import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
 import Constants from 'expo-constants';
 import MapView, { Marker, PROVIDER_GOOGLE, Region } from 'react-native-maps';
@@ -21,6 +12,7 @@ const { width, height } = Dimensions.get('window');
 const MAP_HEIGHT = height * 0.4;
 
 export default function HomeScreen() {
+  const router = useRouter();
   const [coords, setCoords] = useState<{ latitude: number; longitude: number } | null>(null);
   const [address, setAddress] = useState<string | null>(null);
   const [places, setPlaces] = useState<Place[]>([]);
@@ -34,7 +26,7 @@ export default function HomeScreen() {
   const loadAllData = async () => {
     setLoading(true);
 
-    // 1) パーミッション
+    // 1) パーミッション取得
     const { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert('権限エラー', '位置情報の権限がありません');
@@ -46,18 +38,17 @@ export default function HomeScreen() {
     let loc;
     try {
       loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Highest });
+      setCoords({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
     } catch {
       Alert.alert('取得失敗', '現在地の取得に失敗しました');
       setLoading(false);
       return;
     }
-    const { latitude, longitude } = loc.coords;
-    setCoords({ latitude, longitude });
 
     // 3) 逆ジオコーディング
     try {
       const resp = await fetch(
-        `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${apiKey}`
+        `https://maps.googleapis.com/maps/api/geocode/json?latlng=${loc.coords.latitude},${loc.coords.longitude}&key=${apiKey}`
       );
       const json = await resp.json();
       setAddress(
@@ -71,7 +62,7 @@ export default function HomeScreen() {
 
     // 4) Nearby Places
     try {
-      const nearby = await fetchNearbyPlaces(latitude, longitude, 500, apiKey);
+      const nearby = await fetchNearbyPlaces(loc.coords.latitude, loc.coords.longitude, 500, apiKey);
       setPlaces(nearby);
     } catch (e: any) {
       Alert.alert('Places API エラー', e.message);
@@ -91,12 +82,11 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Text style={styles.header}>半径500m以内の周辺施設かもかも</Text>
+      <Text style={styles.header}>半径500m以内の周辺施設</Text>
       {loading && <ActivityIndicator style={{ margin: 16 }} size="large" />}
 
       {coords && (
         <>
-          {/* 地図 */}
           <MapView
             ref={mapRef}
             provider={PROVIDER_GOOGLE}
@@ -108,20 +98,11 @@ export default function HomeScreen() {
               longitudeDelta: 0.01,
             }}
           >
-            {/* 現在地ピン */}
-            <Marker
-              coordinate={coords}
-              title="現在地"
-              description={address ?? undefined}
-            />
-            {/* Nearby Places ピン */}
+            <Marker coordinate={coords} title="現在地" description={address ?? undefined} />
             {places.map((p) => (
               <Marker
                 key={p.place_id}
-                coordinate={{
-                  latitude: p.geometry.location.lat,
-                  longitude: p.geometry.location.lng,
-                }}
+                coordinate={{ latitude: p.geometry.location.lat, longitude: p.geometry.location.lng }}
                 title={p.name}
                 description={p.vicinity}
                 pinColor="blue"
@@ -137,7 +118,6 @@ export default function HomeScreen() {
             ))}
           </MapView>
 
-          {/* リスト */}
           <FlatList
             style={{ flex: 1 }}
             data={places}
@@ -148,17 +128,19 @@ export default function HomeScreen() {
                 <Text style={styles.placeVicinity}>{item.vicinity}</Text>
               </View>
             )}
-            ListEmptyComponent={
-              <Text style={{ textAlign: 'center', margin: 16 }}>
-                施設が見つかりませんでした
-              </Text>
-            }
+            ListEmptyComponent={<Text style={{ textAlign: 'center', margin: 16 }}>施設が見つかりませんでした</Text>}
           />
         </>
       )}
 
-      {/* 再取得 */}
       <Button title="再取得" onPress={loadAllData} />
+
+      {/* ───────────── ここから追加 ───────────── */}
+      <Button
+        title="📝 常識一覧を見る"
+        onPress={() => router.push('/common-sense')}
+      />
+      {/* ───────────── ここまで追加 ───────────── */}
     </SafeAreaView>
   );
 }

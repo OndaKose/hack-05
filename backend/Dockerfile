@@ -1,13 +1,25 @@
+# backend/Dockerfile
 FROM python:3.10-slim
 
+# 1) 作業ディレクトリ
 WORKDIR /app
 
-# Python 依存関係
+# 2) OS パッケージ（pg_isready 用）
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      postgresql-client \
+      netcat-openbsd \
+ && rm -rf /var/lib/apt/lists/*
+
+# 3) Python パッケージ
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# アプリコード一式
-COPY app ./app
+# 4) アプリケーションコードと entrypoint.sh をコピー
+COPY . .
 
-# FastAPI サーバ起動
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+# 5) entrypoint.sh に実行権限を付与
+RUN chmod +x entrypoint.sh
+
+# 6) コンテナ起動時に entrypoint.sh を実行
+ENTRYPOINT ["./entrypoint.sh"]
