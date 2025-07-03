@@ -1,20 +1,20 @@
-#!/bin/bash
+#!/bin/sh
 set -e
 
-DATA_DIR="/var/lib/postgresql/data"
-
-# 1) Postgres データ初期化（省略: すでにテーブル作成は startup イベントでやる想定）
-
-# 2) PostgreSQL をバックグラウンド起動
-docker-entrypoint.sh postgres &  # 公式イメージのエントリポイントを流用
-# こっから、ポートをリッスンするまで待つ
-echo "Waiting for Postgres to start..."
-until pg_isready -h localhost -p 5432 -U postgres; do
+# 環境変数 DATABASE_URL は docker-compose.yml から注入されている想定
+# db サービスが立ち上がるまで待機
+echo "waiting for postgres at ${DB_HOST:-db}:${DB_PORT:-5432}..."
+while ! pg_isready -h "${DB_HOST:-db}" -p "${DB_PORT:-5432}" > /dev/null 2>&1; do
   sleep 1
 done
-echo "Postgres is ready!"
+echo "postgres is ready!"
 
-# 3) マイグレーション（テーブル自動作成）は app/main.py の startup イベントで走る想定
+# テーブル自動作成（マイグレーション代替）
+python - <<'PYCODE'
+from app.database import Base, engine
+Base.metadata.create_all(bind=engine)
+PYCODE
 
-# 4) FastAPI 起動
-exec uvicorn app.main:app --host 0.0.0.0 --port 8000
+# FastAPI 起動
+exec uvicorn app.main:app \
+  --host 0.0.0.0 --port 8000 --reload
