@@ -73,3 +73,12 @@ backend/*.py[cod]
 backend/.env
 
 **/__pycache__
+
+
+# React Native / Expo
+/frontend/assets/images/
+/frontend/hooks/
+
+# すでに ajouté している Python bytecode 除外
+__pycache__/
+*.py[cod]
