@@ -3,5 +3,5 @@ import { Redirect } from 'expo-router';
 
 // `/` に来たら、自動で `/login` にリダイレクト
 export default function Index() {
-  return <Redirect href="/login" />;
+  return <Redirect href="/home" />;
 }
