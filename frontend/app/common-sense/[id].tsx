@@ -154,7 +154,7 @@ export default function DetailScreen() {
             ))}
           </View>
           <View style={styles.levelContainer}>
-            <Text style={styles.levelText}>難易度：{item.level}</Text>
+            <Text style={styles.levelText}>常識レベル：{item.level}</Text>
           </View>
           <Text style={styles.content}>{item.content}</Text>
 
