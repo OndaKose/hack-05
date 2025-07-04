@@ -18,43 +18,45 @@ import Constants from 'expo-constants'
 import MapView, { Marker, PROVIDER_GOOGLE, Region } from 'react-native-maps'
 import { fetchNearbyPlaces, Place } from '../utils/places'
 import { fetchCommonSense, CommonSense } from '../utils/api'
+import { sendCommonSenseNotification } from '../utils/notifications'
 
-// ① フォアグラウンドでもバナー表示する設定
+// フォアグラウンドでもバナー／リストで通知を表示
 Notifications.setNotificationHandler({
-  handleNotification: async (): Promise<any> => ({
+  handleNotification: async () => ({
     shouldShowAlert:  true,
-    shouldPlaySound:  false,
-    shouldSetBadge:   false,
     shouldShowBanner: true,
     shouldShowList:   true,
+    shouldPlaySound:  false,
+    shouldSetBadge:   false,
   }),
-} as any)
+})
 
-// 「駅」か「コンビニ」かの種別を持たせた拡張型
 type PlaceWithKind = Place & { kind: 'station' | 'convenience' }
 
 const { width, height } = Dimensions.get('window')
-const MAP_HEIGHT = height * 0.4
-
-// ポーリング間隔（ミリ秒）: 2分
-const POLL_INTERVAL = 2 * 60 * 1000
+const MAP_HEIGHT       = height * 0.4
+const POLL_INTERVAL    = 20 * 1000  // 20秒
 
 export default function HomeScreen() {
-  const [coords, setCoords] = useState<{ latitude: number; longitude: number } | null>(null)
-  const [places, setPlaces] = useState<PlaceWithKind[]>([])
+  const [coords, setCoords]   = useState<{ latitude: number; longitude: number } | null>(null)
+  const [places, setPlaces]   = useState<PlaceWithKind[]>([])
   const [commons, setCommons] = useState<CommonSense[]>([])
   const [loading, setLoading] = useState(false)
   const mapRef = useRef<MapView>(null)
+
+  // 次回は駅？コンビニ？を保持するフラグ
+  // true → 駅, false → コンビニ
+  const nextIsStationRef = useRef(true)
 
   /** 通知権限リクエスト */
   const askNotificationPermission = async () => {
     const { status } = await Notifications.requestPermissionsAsync()
     if (status !== 'granted') {
-      Alert.alert('通知権限なし', '通知を許可するとアラートを受け取れます')
+      Alert.alert('通知権限なし', '通知を許可するとアラートが届きます')
     }
   }
 
-  /** 一度だけサーバーから常識一覧を取得 */
+  /** 常識一覧をサーバーから一度だけ取得 */
   const loadCommonSense = async () => {
     try {
       const data = await fetchCommonSense()
@@ -64,95 +66,86 @@ export default function HomeScreen() {
     }
   }
 
-  /** 位置情報取得 → 駅＋コンビニ検索 → マーカーセット＆通知 */
   const pollAndNotify = async () => {
     setLoading(true)
     try {
-      // 位置情報権限チェック
+      // --- 1) 位置情報 ---
       const { status } = await Location.requestForegroundPermissionsAsync()
       if (status !== 'granted') {
         Alert.alert('位置情報権限なし', '設定から許可してください')
+        setLoading(false)
         return
       }
-
-      // 現在地取得（2秒だけ待ってみる）
-      await new Promise(resolve => setTimeout(resolve, 2000))
-      const loc = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Highest,
-        // TSエラー回避のため timeout/maximumAge はキャストで回避
-      } as any)
+      await new Promise(r => setTimeout(r, 500))
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Highest } as any)
       const { latitude, longitude } = loc.coords
       setCoords({ latitude, longitude })
 
-      // API Key 取得
+      // --- 2) 駅・コンビニ検索 ---
       const apiKey =
         (Constants.manifest as any)?.extra?.googleMapsApiKey ??
         (Constants.expoConfig as any)?.extra?.googleMapsApiKey
+      const stations     = await fetchNearbyPlaces(latitude, longitude, 2000, apiKey, 'train_station')
+      const conveniences = await fetchNearbyPlaces(latitude, longitude, 2000, apiKey, 'convenience_store')
 
-      // 駅を検索（2000m以内）
-      const stations = await fetchNearbyPlaces(
-        latitude,
-        longitude,
-        2000,
-        apiKey,
-        'train_station'
-      )
-
-      // コンビニを検索（2000m以内）
-      const convenienceStores = await fetchNearbyPlaces(
-        latitude,
-        longitude,
-        2000,
-        apiKey,
-        'convenience_store'
-      )
-
-      // 種別付きにしてまとめる
       const allPlaces: PlaceWithKind[] = [
         ...stations.map(p => ({ ...p, kind: 'station' as const })),
-        ...convenienceStores.map(p => ({ ...p, kind: 'convenience' as const })),
+        ...conveniences.map(p => ({ ...p, kind: 'convenience' as const })),
       ]
       setPlaces(allPlaces)
-
-      // genres が存在するデータを取得
-      const store = allPlaces[0] // “一つでも”あれば最初の要素を使う
-      const commonsForKind = commons.find(c =>
-        c.genres?.includes(store.kind === 'station' ? '駅' : 'コンビニ')
-      )
-      if (commonsForKind) {
-        // 通知スケジュール
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title:
-              store.kind === 'station'
-                ? `[駅のマナー] ${commonsForKind.title}`
-                : `[コンビニのマナー] ${commonsForKind.title}`,
-            body: commonsForKind.content,
-          },
-          trigger: null, // 即時
-        })
+      if (allPlaces.length === 0 || commons.length === 0) {
+        setLoading(false)
+        return
       }
+
+      // --- 3) 交互ロジック ---
+      const targetKind = nextIsStationRef.current ? 'station' : 'convenience'
+      // その種別の場所だけを抽出
+      const placesOfKind = allPlaces.filter(p => p.kind === targetKind)
+
+      let chosenPlace: PlaceWithKind
+      if (placesOfKind.length > 0) {
+        // 見つかったらここで通知 → 切り替え
+        chosenPlace = placesOfKind[Math.floor(Math.random() * placesOfKind.length)]
+        nextIsStationRef.current = !nextIsStationRef.current
+      } else {
+        // 見つからなければフォールバック（切り替えは行わない）
+        chosenPlace = allPlaces[Math.floor(Math.random() * allPlaces.length)]
+      }
+
+      // ラベルと常識ピック
+      const label = chosenPlace.kind === 'station' ? '駅' : 'コンビニ'
+      const matched = commons.filter(c => c.genres?.includes(label))
+      if (matched.length === 0) {
+        setLoading(false)
+        return
+      }
+      const picked = matched[Math.floor(Math.random() * matched.length)]
+      const title  = label === '駅'
+        ? `[駅のマナー] ${picked.title}`
+        : `[コンビニのマナー] ${picked.title}`
+
+      // --- 4) 通知送信 ---
+      await sendCommonSenseNotification(picked.id, title, picked.content)
     } catch (e: any) {
-      console.warn('ポーリングエラー:', e.message)
+      console.error('🎯 ポーリングエラー:', e)
     } finally {
       setLoading(false)
     }
   }
 
+  // 初回＆定期実行
   useEffect(() => {
-    // マウント時の初回
     ;(async () => {
       await askNotificationPermission()
       await loadCommonSense()
       await pollAndNotify()
     })()
-
-    // 定期ポーリング（2分ごと）
-    const id = setInterval(pollAndNotify, POLL_INTERVAL)
-    return () => clearInterval(id)
+    const timer = setInterval(pollAndNotify, POLL_INTERVAL)
+    return () => clearInterval(timer)
   }, [])
 
-  /** 地図を指定座標に移動 */
+  /** 地図を指定位置に移動 */
   const moveMap = (region: Region) => {
     mapRef.current?.animateToRegion(region, 500)
   }
@@ -160,7 +153,7 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <Text style={styles.header}>
-        半径2000m以内の駅＋コンビニ（2分ごとに更新）
+        半径2000m以内の駅＋コンビニ（20秒ごとに交互に通知）
       </Text>
 
       {loading && <ActivityIndicator style={{ margin: 16 }} size="large" />}
@@ -178,24 +171,21 @@ export default function HomeScreen() {
               longitudeDelta: 0.01,
             }}
           >
-            {/* 現在地 */}
             <Marker coordinate={coords} title="現在地" pinColor="red" />
-
-            {/* 駅／コンビニ */}
             {places.map(p => (
               <Marker
                 key={p.place_id}
                 coordinate={{
-                  latitude: p.geometry.location.lat,
+                  latitude:  p.geometry.location.lat,
                   longitude: p.geometry.location.lng,
                 }}
                 title={p.name}
                 pinColor={p.kind === 'station' ? 'blue' : 'green'}
                 onPress={() =>
                   moveMap({
-                    latitude: p.geometry.location.lat,
-                    longitude: p.geometry.location.lng,
-                    latitudeDelta: 0.01,
+                    latitude:       p.geometry.location.lat,
+                    longitude:      p.geometry.location.lng,
+                    latitudeDelta:  0.01,
                     longitudeDelta: 0.01,
                   })
                 }

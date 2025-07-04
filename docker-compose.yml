@@ -4,9 +4,9 @@ services:
   db:
     image: postgres:15
     environment:
-      POSTGRES_USER: postgres
+      POSTGRES_USER:     postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: commonsense
+      POSTGRES_DB:       commonsense
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
@@ -14,19 +14,16 @@ services:
 
   backend:
     build:
-      context: ./backend        # backend フォルダをビルドコンテキストに
+      context: ./backend        # backend フォルダがビルドコンテキスト
       dockerfile: Dockerfile    # その中の Dockerfile を使う
     depends_on:
       - db
     environment:
-      # pg_isready 用にホストを環境変数として渡す例
-      DB_HOST: db
-      DB_PORT: 5432
-      # SQLAlchemy 用の接続文字列
+      # Postgres コンテナへの接続情報
       DATABASE_URL: postgresql://postgres:postgres@db:5432/commonsense
     ports:
-      - "8000:8000"
-    # ENTRYPOINT は Dockerfile 側で指定済みなので省略可
+      - "8008:8008"             # ホストの8008→コンテナの8008
+    # command: は Dockerfile の ENTRYPOINT/CMD に任せる
 
 volumes:
   postgres_data:
