@@ -17,9 +17,8 @@ def register(user: schemas.UserCreate, db: Session = Depends(get_db)):
     return db_user
 
 @router.post("/login", response_model=schemas.UserOut)
-def login(user: schemas.UserCreate, db: Session = Depends(get_db)):
+def login(user: schemas.UserLogin, db: Session = Depends(get_db)):
     db_user = db.query(models.User).filter(models.User.user_name == user.user_name).first()
     if not db_user or db_user.password != user.password:
-        # 認証失敗
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="ユーザー名かパスワードが違います")
     return db_user

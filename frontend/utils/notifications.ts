@@ -1,13 +1,23 @@
 // frontend/utils/notifications.ts
-import * as Notifications from 'expo-notifications';
+import * as Notifications from 'expo-notifications'
 
-export async function sendCommonSenseNotification(id: number, title: string) {
+/**
+ * CommonSense 通知をスケジュールするヘルパー
+ * @param id       常識アイテムの ID
+ * @param title    通知のタイトル
+ * @param body     通知の本文
+ */
+export async function sendCommonSenseNotification(
+  id: number,
+  title: string,
+  body: string
+): Promise<void> {
   await Notifications.scheduleNotificationAsync({
     content: {
-      title,                                           // 通知タイトルに「駅」など
-      body: 'タップして詳細を確認',                    // 任意
-      data: { commonSenseId: id },                     // タップ時に参照する ID
+      title,
+      body,
+      data: { id },
     },
-    trigger: null, // 即時通知
-  });
+    trigger: null,  // 即時
+  })
 }

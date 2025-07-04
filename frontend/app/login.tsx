@@ -4,6 +4,7 @@ import React, { useState } from 'react'
 import { SafeAreaView, View, Text, TextInput, Button, Alert, StyleSheet } from 'react-native'
 import { useRouter } from 'expo-router'
 import { apiLogin, UserLogin, UserOut } from '../utils/api'
+import { saveUser } from '../utils/auth'  // ← 追加
 
 export default function LoginScreen() {
   const router = useRouter()
@@ -20,9 +21,11 @@ export default function LoginScreen() {
     try {
       const creds: UserLogin = { user_name: userName, password }
       const user: UserOut = await apiLogin(creds)
-      // 成功したらユーザー情報をどこかに保存（Context, Zustand など）、ここでは簡単に Alert
+
+      // ログイン成功したらユーザー情報を SecureStore に保存
+      await saveUser(user)
+
       Alert.alert('ログイン成功', `ようこそ ${user.user_name} さん！`)
-      // ホーム画面へ遷移
       router.replace('/home')
     } catch (e: any) {
       Alert.alert('ログイン失敗', e.message || '認証に失敗しました')
@@ -68,7 +71,7 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container:   { flex: 1, justifyContent: 'center', padding: 16, backgroundColor: '#fff' },
   title:       { fontSize: 24, fontWeight: '700', textAlign: 'center', marginBottom: 24 },
-  form:        { },
+  form:        {},
   input:       {
     borderWidth: 1,
     borderColor: '#ccc',

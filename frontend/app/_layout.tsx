@@ -1,43 +1,37 @@
 // frontend/app/_layout.tsx
-import React, { useRef, useEffect } from 'react'
+
+import React, { useEffect } from 'react'
 import { Slot, useRouter } from 'expo-router'
 import * as Notifications from 'expo-notifications'
-import { Alert } from 'react-native'
 
-// フォアグラウンドでもダイアログで通知を表示
+// フォアグラウンドでもバナー／リスト表示
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: false,
-    shouldSetBadge: false,
+    shouldShowAlert:  true,
     shouldShowBanner: true,
-    shouldShowList: true,
+    shouldShowList:   true,
+    shouldPlaySound:  false,
+    shouldSetBadge:   false,
   }),
 })
 
 export default function RootLayout() {
   const router = useRouter()
-  // 通知レスポンスの購読ハンドル
-  const responseListener = useRef<Notifications.Subscription | null>(null)
 
   useEffect(() => {
-    responseListener.current = Notifications.addNotificationResponseReceivedListener(
-      response => {
-        const data = response.notification.request.content.data
-        Alert.alert(
-          `【${data.genre}】の常識`,
-          data.content as string
-        )
-        // ここで detail ページに遷移するなら：
-        // router.push(`/common-sense/${data.id}`)
-      }
-    )
+    // 通知をタップしたときのリスナー
+    const sub = Notifications.addNotificationResponseReceivedListener(response => {
+      const data = response.notification.request.content.data as { id: number }
+      // /common-sense/[id] へ遷移
+      router.push({
+        pathname: '/common-sense/[id]',
+        params:   { id: String(data.id) },
+      })
+    })
     return () => {
-      if (responseListener.current) {
-        Notifications.removeNotificationSubscription(responseListener.current)
-      }
+      sub.remove()
     }
-  }, [])
+  }, [router])
 
   return <Slot />
 }
