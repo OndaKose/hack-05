@@ -1,9 +1,9 @@
-# backend/app/routers/votes.py
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy import func
+from typing import List
+
 from app.database import get_db
 from app import models, schemas
 
@@ -98,3 +98,32 @@ def vote_stats(common_sense_id: int, db: Session = Depends(get_db)):
         "known": known,
         "unknown": unknown,
     }
+
+
+@router.get(
+    "/user/{user_id}",
+    response_model=List[schemas.CommonSense],
+    status_code=status.HTTP_200_OK,
+)
+def get_user_votes(user_id: int, db: Session = Depends(get_db)):
+    """
+    指定ユーザー(user_id)が投票した common_sense をすべて返す
+    """
+    # 1) そのユーザーの投票レコードをすべて取得
+    votes = db.query(models.CommonSenseVote).filter_by(user_id=user_id).all()
+
+    # 投票がない場合は空リストを返す
+    if not votes:
+        return []
+
+    # 2) 投票した common_sense_id の一覧を作成
+    common_ids = [v.common_sense_id for v in votes]
+
+    # 3) common_sense テーブルから該当IDを一括で取得
+    commons = (
+        db.query(models.CommonSense)
+          .filter(models.CommonSense.id.in_(common_ids))
+          .all()
+    )
+
+    return commons

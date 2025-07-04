@@ -1,23 +1,24 @@
-// frontend/utils/notifications.ts
 import * as Notifications from 'expo-notifications'
 
 /**
- * CommonSense 通知をスケジュールするヘルパー
- * @param id       常識アイテムの ID
- * @param title    通知のタイトル
- * @param body     通知の本文
+ * 指定した常識(id, title, content)を即時にローカル通知で表示する
  */
 export async function sendCommonSenseNotification(
   id: number,
-  title: string,
-  body: string
+  notifTitle: string,
+  notifBody: string
 ): Promise<void> {
-  await Notifications.scheduleNotificationAsync({
-    content: {
-      title,
-      body,
-      data: { id },
-    },
-    trigger: null,  // 即時
-  })
+  try {
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: notifTitle,
+        body: notifBody,
+        data: { commonSenseId: id },
+      },
+      // trigger:null で「即時通知」。バックグラウンドでも動けばOK
+      trigger: null,
+    })
+  } catch (e) {
+    console.error('sendCommonSenseNotification error:', e)
+  }
 }
