@@ -1,7 +1,14 @@
 {
-  "extends": "expo/tsconfig.base",
   "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "jsx": "react-native",
     "strict": true,
+    "esModuleInterop": true,
+    "allowJs": true,
+    "moduleResolution": "node",
+    "skipLibCheck": true,
+    "noEmit": true,
     "paths": {
       "@/*": [
         "./*"
@@ -11,7 +18,13 @@
   "include": [
     "**/*.ts",
     "**/*.tsx",
+    "**/*.js",
+    "**/*.jsx",
     ".expo/types/**/*.ts",
-    "expo-env.d.ts"
-  ]
+    "declarations.d.ts",
+    "expo-env.d.ts",
+    "nativewind.d.ts",
+    "expo-router.d.ts"
+  ],
+  "extends": "expo/tsconfig.base"
 }

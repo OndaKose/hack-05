@@ -1,18 +1,25 @@
-# ベースイメージ（Python 3.10 を使用）
+# backend/Dockerfile
 FROM python:3.10-slim
 
-# 作業ディレクトリを /app に設定
+# 1) 作業ディレクトリ
 WORKDIR /app
 
-# 依存関係ファイルをコピーしてインストール
+# 2) OS パッケージ（pg_isready 用）
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      postgresql-client \
+      netcat-openbsd \
+ && rm -rf /var/lib/apt/lists/*
+
+# 3) Python パッケージ
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# アプリケーションコードをコピー
+# 4) アプリケーションコードと entrypoint.sh をコピー
 COPY . .
 
-# 環境変数を設定 (.env も読み込めるように)
-ENV PYTHONUNBUFFERED=1
+# 5) entrypoint.sh に実行権限を付与
+RUN chmod +x entrypoint.sh
 
-# コンテナ起動時に実行するコマンド
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+# 6) コンテナ起動時に entrypoint.sh を実行
+ENTRYPOINT ["./entrypoint.sh"]
