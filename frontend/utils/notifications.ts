@@ -1,24 +1,27 @@
+// frontend/utils/notifications.ts
+
 import * as Notifications from 'expo-notifications'
 
-/**
- * 指定した常識(id, title, content)を即時にローカル通知で表示する
- */
 export async function sendCommonSenseNotification(
   id: number,
-  notifTitle: string,
-  notifBody: string
+  title: string,
+  body: string
 ): Promise<void> {
-  try {
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: notifTitle,
-        body: notifBody,
-        data: { commonSenseId: id },
-      },
-      // trigger:null で「即時通知」。バックグラウンドでも動けばOK
-      trigger: null,
-    })
-  } catch (e) {
-    console.error('sendCommonSenseNotification error:', e)
-  }
+  // 通知ハンドラ設定
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowBanner:  true,
+      shouldShowList:    true,
+      shouldPlaySound:   false,
+      shouldSetBadge:    false,
+    }),
+  })
+
+  const content = { title, body, data: { id } }
+
+  // 即時通知だけをスケジュール（どんな状態でも即時発火）
+  await Notifications.scheduleNotificationAsync({
+    content,
+    trigger: null,  // null = 即時発火
+  })
 }

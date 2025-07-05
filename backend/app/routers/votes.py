@@ -19,17 +19,15 @@ router = APIRouter(
 )
 def create_vote(vote: schemas.VoteCreate, db: Session = Depends(get_db)):
     """
-    投票を作成または更新します。
-    user_id + common_sense_id が既存なら recognized を UPDATE、
-    なければ INSERT（UPSERT）。
+    投票を作成または更新（UPSERT）します。
     """
     stmt = insert(models.CommonSenseVote).values(
         user_id=vote.user_id,
         common_sense_id=vote.common_sense_id,
         recognized=vote.recognized,
     ).on_conflict_do_update(
-        index_elements=['user_id', 'common_sense_id'],
-        set_={'recognized': vote.recognized}
+        index_elements=["user_id", "common_sense_id"],
+        set_={"recognized": vote.recognized},
     )
 
     try:
@@ -37,24 +35,21 @@ def create_vote(vote: schemas.VoteCreate, db: Session = Depends(get_db)):
         db.commit()
     except Exception as e:
         db.rollback()
-        import traceback, sys
-        traceback.print_exc(file=sys.stdout)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"投票の保存に失敗しました: {e}"
+            detail=f"投票の保存に失敗しました: {e}",
         )
 
     db_vote = db.query(models.CommonSenseVote).filter_by(
         user_id=vote.user_id,
-        common_sense_id=vote.common_sense_id
+        common_sense_id=vote.common_sense_id,
     ).first()
     if not db_vote:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="投票データが見つかりませんでした"
+            detail="投票データが見つかりませんでした",
         )
     return db_vote
-
 
 @router.get(
     "/check",
@@ -67,24 +62,23 @@ def check_vote(user_id: int, common_sense_id: int, db: Session = Depends(get_db)
     """
     vote = db.query(models.CommonSenseVote).filter_by(
         user_id=user_id,
-        common_sense_id=common_sense_id
+        common_sense_id=common_sense_id,
     ).first()
     if not vote:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="投票なし")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="投票なし",
+        )
     return vote
-
 
 @router.get(
     "/stats/{common_sense_id}",
+    response_model=dict,
     status_code=status.HTTP_200_OK,
-    response_model=dict
 )
 def vote_stats(common_sense_id: int, db: Session = Depends(get_db)):
     """
-    common_sense_idに対する
-      - 知っていた(recognized=True) 投票数
-      - 知らなかった(recognized=False) 投票数
-    を返す
+    知っていた／知らなかった票数を返す
     """
     known = db.query(func.count(models.CommonSenseVote.id)).filter_by(
         common_sense_id=common_sense_id, recognized=True
@@ -99,7 +93,6 @@ def vote_stats(common_sense_id: int, db: Session = Depends(get_db)):
         "unknown": unknown,
     }
 
-
 @router.get(
     "/user/{user_id}",
     response_model=List[schemas.CommonSense],
@@ -107,23 +100,46 @@ def vote_stats(common_sense_id: int, db: Session = Depends(get_db)):
 )
 def get_user_votes(user_id: int, db: Session = Depends(get_db)):
     """
-    指定ユーザー(user_id)が投票した common_sense をすべて返す
+    指定ユーザーの投票した common_sense をすべて返す
     """
-    # 1) そのユーザーの投票レコードをすべて取得
     votes = db.query(models.CommonSenseVote).filter_by(user_id=user_id).all()
-
-    # 投票がない場合は空リストを返す
     if not votes:
         return []
-
-    # 2) 投票した common_sense_id の一覧を作成
     common_ids = [v.common_sense_id for v in votes]
-
-    # 3) common_sense テーブルから該当IDを一括で取得
     commons = (
         db.query(models.CommonSense)
           .filter(models.CommonSense.id.in_(common_ids))
           .all()
     )
-
     return commons
+
+@router.get(
+    "/user/details/{user_id}",
+    response_model=List[schemas.UserVote],
+    status_code=status.HTTP_200_OK,
+)
+def get_user_vote_details(user_id: int, db: Session = Depends(get_db)):
+    """
+    指定ユーザーの投票詳細（タイトル・内容・評価）を返す
+    """
+    votes = (
+        db.query(
+            models.CommonSenseVote.common_sense_id,
+            models.CommonSense.title,
+            models.CommonSense.content,
+            models.CommonSenseVote.recognized,
+        )
+        .join(models.CommonSense,
+              models.CommonSenseVote.common_sense_id == models.CommonSense.id)
+        .filter(models.CommonSenseVote.user_id == user_id)
+        .all()
+    )
+    return [
+        schemas.UserVote(
+            common_sense_id=v.common_sense_id,
+            title=v.title,
+            content=v.content,
+            recognized=v.recognized,
+        )
+        for v in votes
+    ]
